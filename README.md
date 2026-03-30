@@ -1,4 +1,4 @@
-# EventPass Pro 
+# Lab11_Web - EventPass Pro 
 
 En este lab de web se trabajó una plataforma moderna para la gestión de eventos impulsada por Inteligencia Artificial, construida con Next.js App Router, Firebase y Gemini AI.
 
@@ -34,5 +34,4 @@ En este lab de web se trabajó una plataforma moderna para la gestión de evento
 5. Abrir [http://localhost:3000](http://localhost:3000) en el navegador.
 
 ## Video explicativo
-
-[]
+[https://youtu.be/VlQVpoUe_W0]
