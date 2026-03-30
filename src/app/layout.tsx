@@ -20,6 +20,7 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 import { Toaster } from "@/components/ui/toaster";
+import { Suspense } from 'react'; // <-- Agregado para el fix de hidratación
 import './globals.css';
 
 /**
@@ -77,14 +78,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }): React.ReactElement {
   return (
-    <html lang="es" className={inter.variable}>
-      <body className="flex min-h-screen flex-col antialiased">
+    // suppressHydrationWarning evita errores por extensiones del navegador
+    <html lang="es" className={inter.variable} suppressHydrationWarning>
+      <body className="flex min-h-screen flex-col antialiased" suppressHydrationWarning>
         <AuthProvider>
           {/* Header global */}
           <Header />
 
-          {/* Contenido principal */}
-          <main className="flex-1">{children}</main>
+          {/* Contenido principal envuelto en Suspense para alinear Servidor y Cliente */}
+          <main className="flex-1">
+            <Suspense fallback={<div className="flex justify-center p-8 text-muted-foreground">Cargando contenido...</div>}>
+              {children}
+            </Suspense>
+          </main>
 
           {/* Footer global */}
           <Footer />
