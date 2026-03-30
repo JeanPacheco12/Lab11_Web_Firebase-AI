@@ -9,6 +9,7 @@ import {
   updateEvent as updateEventInDb,
   deleteEvent as deleteEventInDb,
   registerForEvent as registerInDb,
+  getEvents, // <-- línea añadida
 } from '@/data/events';
 import { adminAuth } from '@/lib/firebase/admin';
 
@@ -364,5 +365,34 @@ export async function registerForEventAction(id: string): Promise<FormState> {
       success: false,
       message: error.message || 'Error al registrarse',
     };
+  }
+}
+
+// =============================================================================
+// OBTENER MIS EVENTOS (Dashboard Personal)
+// =============================================================================
+
+/**
+ * Server Action para obtener exclusivamente los eventos del usuario logueado.
+ * Cumple con el criterio "User filter" del Definition of Done.
+ */
+export async function getMyEventsAction() {
+  // 1. Validar autenticación (¡Seguridad primero!)
+  const auth = await validateAuth();
+  if (!auth) {
+    return { success: false, data: [] };
+  }
+
+  try {
+    // 2. Traer los eventos. 
+    // Pedimos todos los eventos y luego filtramos para estar 100% seguros
+    // de que solo retornamos los que le pertenecen a este usuario.
+    const allEvents = await getEvents();
+    const myEvents = allEvents.filter(event => event.organizerId === auth.uid);
+
+    return { success: true, data: myEvents };
+  } catch (error) {
+    console.error('Error al obtener mis eventos:', error);
+    return { success: false, data: [] };
   }
 }

@@ -1,26 +1,47 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { CalendarX } from 'lucide-react';
+import { getMyEventsAction } from '@/actions/eventActions';
+import { EventList } from '@/components/EventList';
+import type { Event } from '@/types/event';
 
 export default function MyEventsPage() {
-  const { user, loading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
+  
+  // Nuevos estados para manejar los eventos
+  const [events, setEvents] = useState<Event[]>([]);
+  const [isLoadingEvents, setIsLoadingEvents] = useState(true);
 
-  // 1. PROTECCIÓN DE RUTA (Protected route)
+  // 1. PROTECCIÓN DE RUTA
   useEffect(() => {
-    // Si la autenticación ya cargó y no hay usuario, pa' fuera
-    if (!loading && !user) {
+    if (!authLoading && !user) {
       router.push('/auth');
     }
-  }, [user, loading, router]);
+  }, [user, authLoading, router]);
 
-  // 2. ESTADO DE CARGA (Loading state)
-  if (loading) {
+  // 2. CARGAR MIS EVENTOS (User filter)
+  useEffect(() => {
+    async function fetchMyEvents() {
+      if (user) {
+        setIsLoadingEvents(true);
+        const result = await getMyEventsAction();
+        if (result.success && result.data) {
+          setEvents(result.data);
+        }
+        setIsLoadingEvents(false);
+      }
+    }
+    fetchMyEvents();
+  }, [user]);
+
+  // 3. ESTADO DE CARGA COMBINADO (Auth + Eventos)
+  if (authLoading || (user && isLoadingEvents)) {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="h-10 w-48 bg-muted animate-pulse rounded mb-8"></div>
@@ -33,7 +54,6 @@ export default function MyEventsPage() {
     );
   }
 
-  // Si no hay usuario, retornamos null para no mostrar la UI mientras ocurre la redirección
   if (!user) return null;
 
   return (
@@ -42,7 +62,7 @@ export default function MyEventsPage() {
         <div>
           <h1 className="text-3xl font-bold">Mis Eventos</h1>
           <p className="text-muted-foreground mt-1">
-            Gestionando como: {user.email}
+            Gestionando como: <span className="font-medium text-foreground">{user.email}</span>
           </p>
         </div>
         <Button asChild>
@@ -50,19 +70,24 @@ export default function MyEventsPage() {
         </Button>
       </div>
 
-      {/* 3. ESTADO VACÍO (Empty state) - Por ahora lo mostramos por defecto */}
-      <div className="flex flex-col items-center justify-center py-16 text-center border-2 border-dashed rounded-lg bg-muted/10">
-        <CalendarX className="h-12 w-12 text-muted-foreground mb-4" />
-        <h2 className="text-xl font-semibold mb-2">Aún no tienes eventos</h2>
-        <p className="text-muted-foreground mb-4 max-w-sm">
-          Crea tu primer evento para empezar a gestionarlo desde aquí.
-        </p>
-        <Button asChild>
-          <Link href="/events/new">Crear mi primer evento</Link>
-        </Button>
-      </div>
-      
-      {/* Aquí listaremos los eventos reales en el Commit 2 */}
+      {/* 4. RENDERIZADO CONDICIONAL: Vacío o Lista de eventos */}
+      {events.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center border-2 border-dashed rounded-lg bg-muted/10">
+          <CalendarX className="h-12 w-12 text-muted-foreground mb-4" />
+          <h2 className="text-xl font-semibold mb-2">Aún no tienes eventos</h2>
+          <p className="text-muted-foreground mb-4 max-w-sm">
+            Crea tu primer evento para empezar a gestionarlo desde aquí.
+          </p>
+          <Button asChild>
+            <Link href="/events/new">Crear mi primer evento</Link>
+          </Button>
+        </div>
+      ) : (
+        <EventList 
+          events={events} 
+          emptyMessage="" 
+        />
+      )}
     </div>
   );
 }
