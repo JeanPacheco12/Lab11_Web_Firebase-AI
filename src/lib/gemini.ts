@@ -92,6 +92,17 @@ export const multipleDescriptionsSchema = {
         type: Type.STRING,
       },
     },
+    category: {
+      type: Type.STRING,
+      description: "La categoría más adecuada para el evento.",
+    },
+    tags: {
+      type: Type.ARRAY,
+      description: "Un arreglo con exactamente 5 etiquetas (tags) relevantes.",
+      items: {
+        type: Type.STRING,
+      },
+    },
   },
-  required: ["descriptions"],
+  required: ["descriptions", "category", "tags"],
 };

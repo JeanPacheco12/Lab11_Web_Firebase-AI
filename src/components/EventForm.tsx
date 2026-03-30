@@ -18,7 +18,7 @@ import { createEventAction, updateEventAction } from '@/actions/eventActions';
 import { generateEventDetailsAction, generateEventPosterAction } from '@/actions/aiActions';
 import { EVENT_CATEGORIES, EVENT_STATUSES, CATEGORY_LABELS, STATUS_LABELS } from '@/types/event';
 import type { FormState, Event } from '@/types/event';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, RefreshCcw } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -35,7 +35,8 @@ const initialState: FormState = {
   message: '',
 };
 
-function MagicGenerateButton({ onGenerate, onStart, onEnd }: { onGenerate: (data: any) => void, onStart: () => void, onEnd: () => void }) {
+// Modificamos el componente para recibir el tono seleccionado
+function MagicGenerateButton({ tone, onGenerate, onStart, onEnd }: { tone: string, onGenerate: (data: any) => void, onStart: () => void, onEnd: () => void }) {
   const [isGenerating, setIsGenerating] = useState(false);
 
   const handleGenerate = async () => {
@@ -54,13 +55,14 @@ function MagicGenerateButton({ onGenerate, onStart, onEnd }: { onGenerate: (data
     setIsGenerating(true);
     onStart();
     try {
-      const result = await generateEventDetailsAction(title);
+      // Le pasamos el tono al Server Action
+      const result = await generateEventDetailsAction(title, tone);
 
       if (result.success && result.data) {
         onGenerate(result.data);
         toast({
           title: "✨ Magia Generada",
-          description: "Se han completado los detalles con ayuda de Gemini AI.",
+          description: "Selecciona la descripción que más te guste.",
         });
       } else {
         toast({
@@ -83,6 +85,7 @@ function MagicGenerateButton({ onGenerate, onStart, onEnd }: { onGenerate: (data
 
   return (
     <Button
+      id="magic-generate-btn"
       type="button"
       variant="ghost"
       size="sm"
@@ -201,6 +204,11 @@ export function EventForm({ event, mode = 'create' }: EventFormProps) {
   const isEditing = mode === 'edit' && !!event;
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [isPosterGenerating, setIsPosterGenerating] = useState(false);
+  
+  // NUEVO: Estados para la IA
+  const [aiTone, setAiTone] = useState('casual');
+  const [generatedOptions, setGeneratedOptions] = useState<any | null>(null);
+
   const { user } = useAuth(); // Import useAuth from context
   const router = useRouter();
 
@@ -269,19 +277,101 @@ export function EventForm({ event, mode = 'create' }: EventFormProps) {
                 />
                 {!isEditing && (
                   <MagicGenerateButton
+                    tone={aiTone}
                     onStart={() => setIsAiGenerating(true)}
                     onEnd={() => setIsAiGenerating(false)}
                     onGenerate={(data) => {
-                      const descInput = document.getElementById('description') as HTMLTextAreaElement;
-                      if (descInput) descInput.value = data.description;
-
-                      const tagsInput = document.getElementById('tags') as HTMLInputElement;
-                      if (tagsInput) tagsInput.value = data.tags.join(', ');
+                      // Guardamos las opciones en lugar de pegarlas directo
+                      setGeneratedOptions(data);
                     }}
                   />
                 )}
               </div>
               <FieldError errors={state.errors?.title} />
+
+              {/* TONE SELECTOR */}
+              {!isEditing && (
+                <div className="flex items-center gap-2 mt-2">
+                  <Label className="text-xs text-muted-foreground">Tono de IA:</Label>
+                  <Select value={aiTone} onValueChange={setAiTone}>
+                    <SelectTrigger className="w-[140px] h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="formal">Formal</SelectItem>
+                      <SelectItem value="casual">Casual</SelectItem>
+                      <SelectItem value="emocionante">Emocionante</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* SELECTION UI: Las 3 tarjetas de opciones */}
+              {generatedOptions && generatedOptions.descriptions && (
+                <div className="mt-4 p-4 border rounded-xl bg-muted/30">
+                  <div className="flex justify-between items-center mb-3">
+                    <h4 className="font-semibold text-sm flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-primary" /> 
+                      Elige la mejor descripción
+                    </h4>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="sm" 
+                      className="h-8 text-xs gap-1"
+                      disabled={isAiGenerating} 
+                      onClick={() => {
+                        const btn = document.getElementById('magic-generate-btn');
+                        if (btn) btn.click();
+                      }}
+                    >
+                      <RefreshCcw className={`h-3 w-3 ${isAiGenerating ? 'animate-spin' : ''}`} />
+                      {isAiGenerating ? 'Generando...' : 'Regenerar'}
+                    </Button>
+                  </div>
+                  
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    {generatedOptions.descriptions.map((desc: string, i: number) => (
+                      <Card key={i} className="flex flex-col shadow-sm hover:border-primary/50 transition-colors">
+                        <CardHeader className="p-3 pb-1">
+                          <CardTitle className="text-xs text-muted-foreground">Opción {i + 1}</CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-3 text-xs flex-grow leading-relaxed">
+                          <p className="line-clamp-6">{desc}</p>
+                        </CardContent>
+                        <CardContent className="p-3 pt-0 mt-auto">
+                          <Button 
+                            type="button" 
+                            size="sm" 
+                            variant="secondary"
+                            className="w-full text-xs h-7 hover:bg-primary hover:text-primary-foreground" 
+                            onClick={() => {
+                              // 1. Aplicar la descripción y avisarle a React
+                              const descInput = document.getElementById('description') as HTMLTextAreaElement;
+                              if (descInput) {
+                                descInput.value = desc;
+                                descInput.dispatchEvent(new Event('change', { bubbles: true }));
+                              }
+
+                              // 2. Aplicar los tags y avisarle a React
+                              const tagsInput = document.getElementById('tags') as HTMLInputElement;
+                              if (tagsInput && generatedOptions.tags && Array.isArray(generatedOptions.tags)) {
+                                tagsInput.value = generatedOptions.tags.join(', ');
+                                tagsInput.dispatchEvent(new Event('change', { bubbles: true }));
+                              }
+
+                              // 3. Limpiar las opciones para cerrar el panel
+                              setGeneratedOptions(null);
+                            }}
+                          >
+                            Usar esta
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">
