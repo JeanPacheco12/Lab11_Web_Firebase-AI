@@ -18,26 +18,26 @@
 // ┌─────────────────────────────────────────────────────────────────────────┐
 // │                    FLUJO: CLIENTE → SERVER ACTION → GEMINI              │
 // ├─────────────────────────────────────────────────────────────────────────┤
-// │                                                                          │
-// │   1. Usuario escribe título ────────────────────────────────────────┐    │
-// │      "Conferencia de React 2025"                                    │    │
-// │                                                                     │    │
-// │   2. Click "Generar con IA" ────────────────────────────────────────┤    │
-// │                                                                     │    │
-// │   3. EventForm llama generateEventDetailsAction(title) ─────────────┤    │
-// │      (Server Action, ejecuta en el servidor)                        │    │
-// │                                                                     │    │
-// │   4. Server Action construye prompt ────────────────────────────────┤    │
-// │      + Envía a Gemini API                                           │    │
-// │                                                                     │    │
-// │   5. Gemini retorna JSON ───────────────────────────────────────────┤    │
-// │      { description, category, tags }                                │    │
-// │                                                                     │    │
-// │   6. Server Action parsea y valida ─────────────────────────────────┤    │
-// │                                                                     │    │
-// │   7. Retorna datos al cliente ──────────────────────────────────────┘    │
-// │      EventForm actualiza campos automáticamente                          │
-// │                                                                          │
+// │                                                                         │
+// │   1. Usuario escribe título ────────────────────────────────────────┐   │
+// │      "Conferencia de React 2025"                                    │   │
+// │                                                                     │   │
+// │   2. Click "Generar con IA" ────────────────────────────────────────┤   │
+// │                                                                     │   │
+// │   3. EventForm llama generateEventDetailsAction(title) ─────────────┤   │
+// │      (Server Action, ejecuta en el servidor)                        │   │
+// │                                                                     │   │
+// │   4. Server Action construye prompt ────────────────────────────────┤   │
+// │      + Envía a Gemini API                                           │   │
+// │                                                                     │   │
+// │   5. Gemini retorna JSON ───────────────────────────────────────────┤   │
+// │      { description, category, tags }                                │   │
+// │                                                                     │   │
+// │   6. Server Action parsea y valida ─────────────────────────────────┤   │
+// │                                                                     │   │
+// │   7. Retorna datos al cliente ──────────────────────────────────────┘   │
+// │      EventForm actualiza campos automáticamente                         │
+// │                                                                         │
 // └─────────────────────────────────────────────────────────────────────────┘
 // ```
 //
@@ -53,7 +53,8 @@
 
 'use server';
 
-import { getGeminiClient, GEMINI_MODELS } from '@/lib/gemini';
+// Importamos el nuevo schema que creamos para forzar las 3 opciones
+import { getGeminiClient, GEMINI_MODELS, multipleDescriptionsSchema } from '@/lib/gemini';
 import { EVENT_CATEGORIES } from '@/types/event';
 
 // =============================================================================
@@ -61,12 +62,17 @@ import { EVENT_CATEGORIES } from '@/types/event';
 // =============================================================================
 
 export interface GeneratedEventDetails {
-    description: string;
+    // Ahora descriptions es un array de 3 strings
+    descriptions: string[];
     category: string;
     tags: string[];
 }
 
-export async function generateEventDetailsAction(title: string): Promise<{ success: boolean; data?: GeneratedEventDetails; error?: string }> {
+// Actualizamos los parámetros: Ahora recibe el title y el tone (opcional, por defecto 'casual')
+export async function generateEventDetailsAction(
+  title: string,
+  tone: string = 'casual'
+): Promise<{ success: boolean; data?: GeneratedEventDetails; error?: string }> {
     try {
         if (!process.env.GEMINI_API_KEY) {
             throw new Error('GEMINI_API_KEY is not configured');
@@ -78,23 +84,25 @@ export async function generateEventDetailsAction(title: string): Promise<{ succe
 
         const client = getGeminiClient();
 
+        // Actualizamos el prompt para exigir las 3 opciones, aplicar el tono y estructurar el JSON final
         const prompt = `
-      You are an expert event planner. Based on the event title "${title}", please generate:
-      1. A compelling and engaging description (2-3 paragraphs, MUST be under 1000 characters).
-      2. The most suitable category from this list: ${EVENT_CATEGORIES.join(', ')}.
-      3. A list of 5 relevant tags (lowercase, concise).
+      You are an expert event planner and copywriter. Based on the event title "${title}", please generate:
+      1. Generate exactly 3 different options for a compelling and engaging description. 
+         The tone of all 3 descriptions must be: ${tone}. 
+         Each description must be 2-3 paragraphs and under 1000 characters.
+      2. The most suitable category from this exact list: ${EVENT_CATEGORIES.join(', ')}.
+      3. A list of exactly 5 relevant tags (lowercase, concise).
 
-      Return the response in strictly valid JSON format with this structure:
+      You must return the response in strictly valid JSON format matching this exact structure:
       {
-        "description": "string",
-        "category": "string",
-        "tags": ["tag1", "tag2"]
+        "descriptions": ["option 1", "option 2", "option 3"],
+        "category": "category_name",
+        "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"]
       }
       Do not include any markdown formatting or explanations, just the JSON string.
     `;
 
-        // The new SDK syntax might differ, but assuming standardized usage:
-        // client.models.generateContent({ model: 'model-name', contents: ... })
+        // The new SDK syntax
         const result = await client.models.generateContent({
             model: GEMINI_MODELS.TEXT,
             contents: [
@@ -104,7 +112,9 @@ export async function generateEventDetailsAction(title: string): Promise<{ succe
                 }
             ],
             config: {
-                responseMimeType: 'application/json'
+                responseMimeType: 'application/json',
+                // Le pasamos el schema para forzar la estructura de las descripciones
+                responseSchema: multipleDescriptionsSchema, 
             }
         });
 
@@ -119,6 +129,11 @@ export async function generateEventDetailsAction(title: string): Promise<{ succe
         const cleanedText = text.replace(/```json\n?|\n?```/g, '').trim();
 
         const data = JSON.parse(cleanedText) as GeneratedEventDetails;
+
+        // Validamos que Gemini haya devuelto las 3 opciones
+        if (!data.descriptions || !Array.isArray(data.descriptions) || data.descriptions.length === 0) {
+             throw new Error('Gemini did not return the descriptions array properly.');
+        }
 
         // Validate category
         if (!EVENT_CATEGORIES.includes(data.category as any)) {

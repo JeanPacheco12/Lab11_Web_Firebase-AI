@@ -32,7 +32,8 @@
 // ```
 // =============================================================================
 
-import { GoogleGenAI } from '@google/genai';
+// ¡Agregamos 'Type' a la importación original!
+import { GoogleGenAI, Type } from '@google/genai'; 
 
 // =============================================================================
 // INICIALIZACIÓN DEL CLIENTE
@@ -73,4 +74,24 @@ export const GEMINI_MODELS = {
  */
 export const getGeminiClient = () => {
   return genAI;
+};
+
+// =============================================================================
+// ESQUEMAS DE SALIDA (STRUCTURED OUTPUTS) - Añadido para el Challenge Lab
+// =============================================================================
+// Definimos la estructura exacta que queremos que Gemini nos devuelva.
+// =============================================================================
+
+export const multipleDescriptionsSchema = {
+  type: Type.OBJECT,
+  properties: {
+    descriptions: {
+      type: Type.ARRAY,
+      description: "Un arreglo que contiene exactamente 3 opciones de descripciones generadas para el evento.",
+      items: {
+        type: Type.STRING,
+      },
+    },
+  },
+  required: ["descriptions"],
 };
